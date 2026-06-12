@@ -1,0 +1,4 @@
+feature_set,f1,precision,recall,roc_auc,winner
+with_season,0.8306,0.7461,0.9367,0.998,False
+without_season,0.823,0.7324,0.9392,0.9979,False
+with_season_and_rainy,0.854,0.7732,0.9538,0.9984,True

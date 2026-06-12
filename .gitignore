@@ -1,0 +1,29 @@
+# Data — reproducible via pipeline/ingest.py
+data/raw/
+data/processed/
+
+# Model artifact — reproducible via models/forecast.py
+outputs/model.joblib
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Environments
+.env
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# pytest
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db

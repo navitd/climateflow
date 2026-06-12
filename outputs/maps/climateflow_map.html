@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_5aa94012a3db2770b357c74995b41139 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+</head>
+<body>
+    
+    
+    <div style='position:fixed; bottom:30px; left:30px; z-index:1000;
+                background:white; padding:10px 14px; border-radius:8px;
+                border:1px solid #ccc; font-family:sans-serif; font-size:12px'>
+      <b>Extreme day frequency</b><br>
+      <span style='color:#1a9850'>&#9632;</span> Low &nbsp;&nbsp;
+      <span style='color:#fee08b'>&#9632;</span> Medium &nbsp;&nbsp;
+      <span style='color:#d73027'>&#9632;</span> High<br>
+      <i style='font-size:11px'>Marker size also reflects frequency</i>
+    </div>
+    
+    
+            <div class="folium-map" id="map_5aa94012a3db2770b357c74995b41139" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_5aa94012a3db2770b357c74995b41139 = L.map(
+                "map_5aa94012a3db2770b357c74995b41139",
+                {
+                    center: [56.0, -96.0],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 4,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_2b2a0bdd1e064f758a1648284b6e08e9 = L.tileLayer(
+                "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 20,
+  "maxNativeZoom": 20,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors \u0026copy; \u003ca href=\"https://carto.com/attributions\"\u003eCARTO\u003c/a\u003e",
+  "subdomains": "abcd",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_2b2a0bdd1e064f758a1648284b6e08e9.addTo(map_5aa94012a3db2770b357c74995b41139);
+        
+    
+            var circle_marker_30b19b49e5692323746d870c5e68a881 = L.circleMarker(
+                [49.29535277777778, -123.12186944444444],
+                {"bubblingMouseEvents": true, "color": "#feec9f", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#feec9f", "fillOpacity": 0.85, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 14.9, "stroke": true, "weight": 3}
+            ).addTo(map_5aa94012a3db2770b357c74995b41139);
+        
+    
+        var popup_fbdb5421a39ac5ef5d3625530c5d02ff = L.popup({
+  "maxWidth": 260,
+});
+
+        
+            
+                var html_457d1b41a6dc0841636e9d08da11adf8 = $(`<div id="html_457d1b41a6dc0841636e9d08da11adf8" style="width: 100.0%; height: 100.0%;">         <div style='font-family:sans-serif; font-size:13px; min-width:180px'>           <b>Vancouver</b><br>           <hr style='margin:4px 0'>           Extreme day frequency (2004–2023): <b>3.6%</b><br>           Test period actual extreme days: <b>68</b><br>           Test period predicted extreme days: <b>68</b><br>           Model F1 (test set): <b>0.926</b>         </div>         </div>`)[0];
+                popup_fbdb5421a39ac5ef5d3625530c5d02ff.setContent(html_457d1b41a6dc0841636e9d08da11adf8);
+            
+        
+
+        circle_marker_30b19b49e5692323746d870c5e68a881.bindPopup(popup_fbdb5421a39ac5ef5d3625530c5d02ff)
+        ;
+
+        
+    
+    
+            circle_marker_30b19b49e5692323746d870c5e68a881.bindTooltip(
+                `<div>
+                     Vancouver  (3.6% extreme)
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_bbb38037796da46f6391e79a3ee73f03 = L.circleMarker(
+                [51.10944722222222, -114.00029722222222],
+                {"bubblingMouseEvents": true, "color": "#a50026", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#a50026", "fillOpacity": 0.85, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 17.425, "stroke": true, "weight": 3}
+            ).addTo(map_5aa94012a3db2770b357c74995b41139);
+        
+    
+        var popup_6b88c3bd551cebe74cc121f64205d36a = L.popup({
+  "maxWidth": 260,
+});
+
+        
+            
+                var html_eadbbfaff8f74ab6311205f53acfe99a = $(`<div id="html_eadbbfaff8f74ab6311205f53acfe99a" style="width: 100.0%; height: 100.0%;">         <div style='font-family:sans-serif; font-size:13px; min-width:180px'>           <b>Calgary</b><br>           <hr style='margin:4px 0'>           Extreme day frequency (2004–2023): <b>4.6%</b><br>           Test period actual extreme days: <b>76</b><br>           Test period predicted extreme days: <b>88</b><br>           Model F1 (test set): <b>0.878</b>         </div>         </div>`)[0];
+                popup_6b88c3bd551cebe74cc121f64205d36a.setContent(html_eadbbfaff8f74ab6311205f53acfe99a);
+            
+        
+
+        circle_marker_bbb38037796da46f6391e79a3ee73f03.bindPopup(popup_6b88c3bd551cebe74cc121f64205d36a)
+        ;
+
+        
+    
+    
+            circle_marker_bbb38037796da46f6391e79a3ee73f03.bindTooltip(
+                `<div>
+                     Calgary  (4.6% extreme)
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_730bb6ddffec7dc36b887cd8d6394fd9 = L.circleMarker(
+                [53.57305777777778, -113.51666944444445],
+                {"bubblingMouseEvents": true, "color": "#f57446", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#f57446", "fillOpacity": 0.85, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 16.2, "stroke": true, "weight": 3}
+            ).addTo(map_5aa94012a3db2770b357c74995b41139);
+        
+    
+        var popup_8193a0a37b0c6c0edeff41d0839cc146 = L.popup({
+  "maxWidth": 260,
+});
+
+        
+            
+                var html_e20a7a60fbd021bdbc78ea7c1629adf5 = $(`<div id="html_e20a7a60fbd021bdbc78ea7c1629adf5" style="width: 100.0%; height: 100.0%;">         <div style='font-family:sans-serif; font-size:13px; min-width:180px'>           <b>Edmonton</b><br>           <hr style='margin:4px 0'>           Extreme day frequency (2004–2023): <b>4.1%</b><br>           Test period actual extreme days: <b>69</b><br>           Test period predicted extreme days: <b>91</b><br>           Model F1 (test set): <b>0.825</b>         </div>         </div>`)[0];
+                popup_8193a0a37b0c6c0edeff41d0839cc146.setContent(html_e20a7a60fbd021bdbc78ea7c1629adf5);
+            
+        
+
+        circle_marker_730bb6ddffec7dc36b887cd8d6394fd9.bindPopup(popup_8193a0a37b0c6c0edeff41d0839cc146)
+        ;
+
+        
+    
+    
+            circle_marker_730bb6ddffec7dc36b887cd8d6394fd9.bindTooltip(
+                `<div>
+                     Edmonton  (4.1% extreme)
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_49ad13ed38e7f2254e7305e86b51754b = L.circleMarker(
+                [51.48333333333333, -107.05],
+                {"bubblingMouseEvents": true, "color": "#d93529", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#d93529", "fillOpacity": 0.85, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 16.775, "stroke": true, "weight": 3}
+            ).addTo(map_5aa94012a3db2770b357c74995b41139);
+        
+    
+        var popup_05da73d2b4a32e85e25da580ce74d8bb = L.popup({
+  "maxWidth": 260,
+});
+
+        
+            
+                var html_51c012207b26d4f44f51d318a117f27a = $(`<div id="html_51c012207b26d4f44f51d318a117f27a" style="width: 100.0%; height: 100.0%;">         <div style='font-family:sans-serif; font-size:13px; min-width:180px'>           <b>Saskatoon</b><br>           <hr style='margin:4px 0'>           Extreme day frequency (2004–2023): <b>4.3%</b><br>           Test period actual extreme days: <b>72</b><br>           Test period predicted extreme days: <b>95</b><br>           Model F1 (test set): <b>0.814</b>         </div>         </div>`)[0];
+                popup_05da73d2b4a32e85e25da580ce74d8bb.setContent(html_51c012207b26d4f44f51d318a117f27a);
+            
+        
+
+        circle_marker_49ad13ed38e7f2254e7305e86b51754b.bindPopup(popup_05da73d2b4a32e85e25da580ce74d8bb)
+        ;
+
+        
+    
+    
+            circle_marker_49ad13ed38e7f2254e7305e86b51754b.bindTooltip(
+                `<div>
+                     Saskatoon  (4.3% extreme)
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_c96221f045b297ecb9391c9af08ea170 = L.circleMarker(
+                [49.88833555555556, -97.1294463888889],
+                {"bubblingMouseEvents": true, "color": "#148d4a", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#148d4a", "fillOpacity": 0.85, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 12.125, "stroke": true, "weight": 3}
+            ).addTo(map_5aa94012a3db2770b357c74995b41139);
+        
+    
+        var popup_e804ce571eb740af8b34215f0526dca4 = L.popup({
+  "maxWidth": 260,
+});
+
+        
+            
+                var html_c56e01bfb5f84a97b7dfe393aea83a3b = $(`<div id="html_c56e01bfb5f84a97b7dfe393aea83a3b" style="width: 100.0%; height: 100.0%;">         <div style='font-family:sans-serif; font-size:13px; min-width:180px'>           <b>Winnipeg</b><br>           <hr style='margin:4px 0'>           Extreme day frequency (2004–2023): <b>2.5%</b><br>           Test period actual extreme days: <b>37</b><br>           Test period predicted extreme days: <b>46</b><br>           Model F1 (test set): <b>0.892</b>         </div>         </div>`)[0];
+                popup_e804ce571eb740af8b34215f0526dca4.setContent(html_c56e01bfb5f84a97b7dfe393aea83a3b);
+            
+        
+
+        circle_marker_c96221f045b297ecb9391c9af08ea170.bindPopup(popup_e804ce571eb740af8b34215f0526dca4)
+        ;
+
+        
+    
+    
+            circle_marker_c96221f045b297ecb9391c9af08ea170.bindTooltip(
+                `<div>
+                     Winnipeg  (2.5% extreme)
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_8f8c70149b99e7127163750c6cf7d3ec = L.circleMarker(
+                [43.66666666666666, -79.4],
+                {"bubblingMouseEvents": true, "color": "#30a255", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#30a255", "fillOpacity": 0.85, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 12.425, "stroke": true, "weight": 3}
+            ).addTo(map_5aa94012a3db2770b357c74995b41139);
+        
+    
+        var popup_ddceb31f3d98557a6f77fd924999c7dd = L.popup({
+  "maxWidth": 260,
+});
+
+        
+            
+                var html_2cdd3fbb7646c300e46941be2b710047 = $(`<div id="html_2cdd3fbb7646c300e46941be2b710047" style="width: 100.0%; height: 100.0%;">         <div style='font-family:sans-serif; font-size:13px; min-width:180px'>           <b>Toronto</b><br>           <hr style='margin:4px 0'>           Extreme day frequency (2004–2023): <b>2.6%</b><br>           Test period actual extreme days: <b>20</b><br>           Test period predicted extreme days: <b>35</b><br>           Model F1 (test set): <b>0.691</b>         </div>         </div>`)[0];
+                popup_ddceb31f3d98557a6f77fd924999c7dd.setContent(html_2cdd3fbb7646c300e46941be2b710047);
+            
+        
+
+        circle_marker_8f8c70149b99e7127163750c6cf7d3ec.bindPopup(popup_ddceb31f3d98557a6f77fd924999c7dd)
+        ;
+
+        
+    
+    
+            circle_marker_8f8c70149b99e7127163750c6cf7d3ec.bindTooltip(
+                `<div>
+                     Toronto  (2.6% extreme)
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_dc61cfdcdacd30b1828ece39ff16f096 = L.circleMarker(
+                [45.38333333333333, -75.71666666666667],
+                {"bubblingMouseEvents": true, "color": "#95d168", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#95d168", "fillOpacity": 0.85, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 13.25, "stroke": true, "weight": 3}
+            ).addTo(map_5aa94012a3db2770b357c74995b41139);
+        
+    
+        var popup_7ae5d6c674b06124867908430cffb53c = L.popup({
+  "maxWidth": 260,
+});
+
+        
+            
+                var html_31724c4a4a5f77da596c6190a0053488 = $(`<div id="html_31724c4a4a5f77da596c6190a0053488" style="width: 100.0%; height: 100.0%;">         <div style='font-family:sans-serif; font-size:13px; min-width:180px'>           <b>Ottawa</b><br>           <hr style='margin:4px 0'>           Extreme day frequency (2004–2023): <b>2.9%</b><br>           Test period actual extreme days: <b>25</b><br>           Test period predicted extreme days: <b>37</b><br>           Model F1 (test set): <b>0.806</b>         </div>         </div>`)[0];
+                popup_7ae5d6c674b06124867908430cffb53c.setContent(html_31724c4a4a5f77da596c6190a0053488);
+            
+        
+
+        circle_marker_dc61cfdcdacd30b1828ece39ff16f096.bindPopup(popup_7ae5d6c674b06124867908430cffb53c)
+        ;
+
+        
+    
+    
+            circle_marker_dc61cfdcdacd30b1828ece39ff16f096.bindTooltip(
+                `<div>
+                     Ottawa  (2.9% extreme)
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_85f2c6f58a4dcbd6d06d4f29569564ec = L.circleMarker(
+                [45.50474166666667, -73.57916666666667],
+                {"bubblingMouseEvents": true, "color": "#006837", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#006837", "fillOpacity": 0.85, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 11.675, "stroke": true, "weight": 3}
+            ).addTo(map_5aa94012a3db2770b357c74995b41139);
+        
+    
+        var popup_4c33d7526f5ece7355516558ca2f1411 = L.popup({
+  "maxWidth": 260,
+});
+
+        
+            
+                var html_06983bc9a4a0bad4492c9eb6164fa5fa = $(`<div id="html_06983bc9a4a0bad4492c9eb6164fa5fa" style="width: 100.0%; height: 100.0%;">         <div style='font-family:sans-serif; font-size:13px; min-width:180px'>           <b>Montreal</b><br>           <hr style='margin:4px 0'>           Extreme day frequency (2004–2023): <b>2.3%</b><br>           Test period actual extreme days: <b>20</b><br>           Test period predicted extreme days: <b>18</b><br>           Model F1 (test set): <b>0.947</b>         </div>         </div>`)[0];
+                popup_4c33d7526f5ece7355516558ca2f1411.setContent(html_06983bc9a4a0bad4492c9eb6164fa5fa);
+            
+        
+
+        circle_marker_85f2c6f58a4dcbd6d06d4f29569564ec.bindPopup(popup_4c33d7526f5ece7355516558ca2f1411)
+        ;
+
+        
+    
+    
+            circle_marker_85f2c6f58a4dcbd6d06d4f29569564ec.bindTooltip(
+                `<div>
+                     Montreal  (2.3% extreme)
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_b24b947cfc0e884438185296ef620b0f = L.circleMarker(
+                [46.83694444444444, -71.19722222222222],
+                {"bubblingMouseEvents": true, "color": "#33a456", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#33a456", "fillOpacity": 0.85, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 12.45, "stroke": true, "weight": 3}
+            ).addTo(map_5aa94012a3db2770b357c74995b41139);
+        
+    
+        var popup_eb031964c24ab14c8ad206fc63ecd46f = L.popup({
+  "maxWidth": 260,
+});
+
+        
+            
+                var html_dc5c758bfa296e72d5e296a772f7b0ff = $(`<div id="html_dc5c758bfa296e72d5e296a772f7b0ff" style="width: 100.0%; height: 100.0%;">         <div style='font-family:sans-serif; font-size:13px; min-width:180px'>           <b>Quebec</b><br>           <hr style='margin:4px 0'>           Extreme day frequency (2004–2023): <b>2.6%</b><br>           Test period actual extreme days: <b>24</b><br>           Test period predicted extreme days: <b>29</b><br>           Model F1 (test set): <b>0.906</b>         </div>         </div>`)[0];
+                popup_eb031964c24ab14c8ad206fc63ecd46f.setContent(html_dc5c758bfa296e72d5e296a772f7b0ff);
+            
+        
+
+        circle_marker_b24b947cfc0e884438185296ef620b0f.bindPopup(popup_eb031964c24ab14c8ad206fc63ecd46f)
+        ;
+
+        
+    
+    
+            circle_marker_b24b947cfc0e884438185296ef620b0f.bindTooltip(
+                `<div>
+                     Quebec  (2.6% extreme)
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+</script>
+</html>
