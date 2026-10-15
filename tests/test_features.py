@@ -3,7 +3,8 @@ Test suite for pipeline/features.py
 
 Four categories:
   1. Unit tests      — one transformation function at a time
-  2. Leakage tests   — rolling is trailing, thresholds from training only
+  2. Leakage tests   — rolling ends yesterday, thresholds from training only,
+                       model inputs for day t do not depend on day t's weather
   3. Invariant tests — domain-knowledge assertions
   4. Schema tests    — output columns and dtypes
 """
@@ -17,11 +18,14 @@ from pipeline.features import (
     add_lag_features,
     add_rolling_features,
     add_relative_features,
+    add_previous_day_features,
     add_target,
+    build_features,
     compute_thresholds,
     drop_inserted,
     reindex_to_full_calendar,
 )
+from models.forecast import FEATURE_SETS
 
 TRAIN_END_YEAR = 2019
 
@@ -155,8 +159,8 @@ class TestRollingFeatures:
         df["MEAN_TEMPERATURE"] = [float(i) for i in range(10)]
         df = df.sort_values(["city", "LOCAL_DATE"]).reset_index(drop=True)
         result = add_rolling_features(df)
-        # Row 4 (day 5): rolling mean of days 0-4 = (0+1+2+3+4)/5 = 2.0
-        assert result["temp_roll_5"].iloc[4] == pytest.approx(2.0)
+        # Row 5 (day 6): rolling mean of days 0-4 = (0+1+2+3+4)/5 = 2.0
+        assert result["temp_roll_5"].iloc[5] == pytest.approx(2.0)
 
     def test_roll_does_not_cross_city_boundary(self):
         ottawa = make_daily("Ottawa",  n=5, mean_temp=100.0)
@@ -296,17 +300,17 @@ class TestTargetVariable:
 
 class TestNoDataLeakage:
 
-    def test_rolling_is_trailing_not_centred(self):
+    def test_rolling_ends_yesterday(self):
         df = make_daily(n=20)
         temps = [float(i) for i in range(20)]
         df["MEAN_TEMPERATURE"] = temps
         df = df.sort_values(["city", "LOCAL_DATE"]).reset_index(drop=True)
         result = add_rolling_features(df)
 
-        # At row index 9 (day 10): trailing mean of rows 5-9 = (5+6+7+8+9)/5 = 7.0
-        # A centred mean would include rows 7-11 = (7+8+9+10+11)/5 = 9.0
-        assert result["temp_roll_5"].iloc[9] == pytest.approx(7.0), (
-            "Rolling mean is centred — this is data leakage"
+        # At row index 9 (day 10): mean of rows 4-8 = (4+5+6+7+8)/5 = 6.0
+        # Including today would give rows 5-9 = 7.0; a centred mean rows 7-11 = 9.0
+        assert result["temp_roll_5"].iloc[9] == pytest.approx(6.0), (
+            "Rolling mean includes day t — this is data leakage"
         )
 
     def test_thresholds_unchanged_by_test_data(self):
@@ -330,6 +334,72 @@ class TestNoDataLeakage:
         )
 
 
+class TestForecastInputsExcludeDayT:
+    """Changing day t's observed weather must not change any model input for day t."""
+
+    MODEL_FEATURES = sorted({f for feats in FEATURE_SETS.values() for f in feats})
+    DAY_T = pd.Timestamp("2010-01-20")
+
+    @staticmethod
+    def make_series():
+        df = make_daily(n=40, start="2010-01-01")
+        rng = np.random.default_rng(0)
+        df["MEAN_TEMPERATURE"] = rng.normal(-10, 5, len(df)).round(1)
+        df["MAX_TEMPERATURE"]  = df["MEAN_TEMPERATURE"] + 4
+        df["MIN_TEMPERATURE"]  = df["MEAN_TEMPERATURE"] - 4
+        df["TOTAL_PRECIPITATION"] = rng.uniform(0, 5, len(df)).round(1)
+        return df
+
+    def perturb_day_t(self, df):
+        df = df.copy()
+        day = df["LOCAL_DATE"] == self.DAY_T
+        df.loc[day, ["MAX_TEMPERATURE", "MEAN_TEMPERATURE", "MIN_TEMPERATURE"]] = [10.0, -15.0, -40.0]
+        df.loc[day, "TOTAL_PRECIPITATION"] = 80.0
+        df.loc[day, "SNOW_ON_GROUND"] = 50.0
+        return df
+
+    def build_pair(self):
+        thresholds = make_thresholds(upper=5.0, lower=-30.0)
+        base = build_features(self.make_series(), thresholds, validate=False)
+        perturbed = build_features(self.perturb_day_t(self.make_series()), thresholds, validate=False)
+        return base.set_index("LOCAL_DATE"), perturbed.set_index("LOCAL_DATE")
+
+    def test_model_inputs_for_day_t_unchanged(self):
+        base, perturbed = self.build_pair()
+        # Sanity: the perturbation does change day t's label
+        assert base.loc[self.DAY_T, "is_extreme_day"] != perturbed.loc[self.DAY_T, "is_extreme_day"]
+        pd.testing.assert_series_equal(
+            base.loc[self.DAY_T, self.MODEL_FEATURES],
+            perturbed.loc[self.DAY_T, self.MODEL_FEATURES],
+            check_names=False,
+            obj="Model inputs for day t changed when day t's weather changed — target leakage",
+        )
+
+    def test_model_inputs_for_day_after_do_change(self):
+        # Guards against the test above passing because the features ignore weather entirely
+        base, perturbed = self.build_pair()
+        day_after = self.DAY_T + pd.Timedelta(days=1)
+        changed = [
+            f for f in self.MODEL_FEATURES
+            if not np.isclose(base.loc[day_after, f], perturbed.loc[day_after, f], equal_nan=True)
+        ]
+        for f in ["prev_temp_max_relative", "prev_temp_min_relative", "temp_lag_1",
+                  "temp_roll_5"]:
+            assert f in changed, f"{f} for day t+1 should reflect day t's weather"
+
+    def test_previous_day_missing_gives_nan_not_older_value(self):
+        df = make_daily(n=10)
+        df["MAX_TEMPERATURE"] = [float(i) for i in range(10)]
+        df["MIN_TEMPERATURE"] = df["MAX_TEMPERATURE"] - 5
+        df = df[df["LOCAL_DATE"] != pd.Timestamp("2010-01-05")].reset_index(drop=True)
+        result = build_features(df, make_thresholds(upper=50.0, lower=-50.0), validate=False)
+        jan6 = result[result["LOCAL_DATE"] == pd.Timestamp("2010-01-06")].iloc[0]
+        assert pd.isna(jan6["prev_temp_max_relative"]), (
+            "Day after a gap took an older day's value as 'yesterday'"
+        )
+        assert pd.isna(jan6["temp_lag_1"])
+
+
 # ---------------------------------------------------------------------------
 # 3. Invariant tests
 # ---------------------------------------------------------------------------
@@ -341,14 +411,8 @@ class TestInvariants:
         df = make_daily(n=365, start="2010-01-01",
                         mean_temp=5.0, max_temp=9.0, min_temp=1.0)
         df["LOCAL_YEAR"] = 2010
-        df = add_lag_features(df)
-        df = add_rolling_features(df)
-        df = add_relative_features(df)
-        df = add_derived_features(df)
-        df = add_calendar_features(df)
         thresholds = make_thresholds(upper=30.0, lower=-20.0)
-        df = add_target(df, thresholds, validate=False)
-        return df
+        return build_features(df, thresholds, validate=False)
 
     def test_temp_range_never_negative(self, full_features):
         assert (full_features["temp_range"].dropna() >= 0).all()
@@ -375,13 +439,8 @@ class TestSchema:
         df = make_daily(n=365, start="2010-01-01",
                         mean_temp=5.0, max_temp=9.0, min_temp=1.0)
         df["LOCAL_YEAR"] = 2010
-        df = add_lag_features(df)
-        df = add_rolling_features(df)
-        df = add_relative_features(df)
-        df = add_derived_features(df)
-        df = add_calendar_features(df)
         thresholds = make_thresholds(upper=30.0, lower=-20.0)
-        return add_target(df, thresholds, validate=False)
+        return build_features(df, thresholds, validate=False)
 
     def test_all_feature_columns_present(self, full_features):
         required = [
@@ -389,7 +448,10 @@ class TestSchema:
             "temp_lag_1", "temp_lag_2", "temp_lag_3",
             "temp_roll_5", "temp_roll_7", "precip_roll_7",
             "temp_range", "snow_present",
-            "day_of_year", "month", "season",
+            "prev_temp_relative", "prev_temp_max_relative", "prev_temp_min_relative",
+            "prev_precip_relative", "prev_temp_range", "prev_snow_present",
+            "prev_is_extreme_day",
+            "day_of_year", "month", "season", "rainy_season",
             "is_extreme_day",
         ]
         missing = [c for c in required if c not in full_features.columns]
@@ -399,7 +461,7 @@ class TestSchema:
         assert pd.api.types.is_datetime64_any_dtype(full_features["LOCAL_DATE"])
 
     def test_feature_columns_are_numeric(self, full_features):
-        for col in ["temp_relative", "temp_lag_1", "temp_roll_5", "temp_range"]:
+        for col in ["prev_temp_relative", "temp_lag_1", "temp_roll_5", "prev_temp_range"]:
             assert pd.api.types.is_numeric_dtype(full_features[col]), (
                 f"{col} should be numeric"
             )

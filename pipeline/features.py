@@ -2,6 +2,16 @@
 Step 3 — Feature Engineering
 Reads climate_daily_clean from SQLite, engineers all model-ready features,
 and saves climate_features + city_thresholds tables.
+
+Forecasting setup: the model predicts whether day t is extreme using only
+information available at the end of day t-1. Every feature built from observed
+weather is therefore shifted so that it ends on day t-1. Calendar features of
+day t (day_of_year, month, season, rainy_season) are known in advance and are
+not shifted.
+
+The same-day columns (temp_relative, temp_range, ...) are kept in the output
+table for exploratory analysis only. They are computed from the same
+MAX/MIN temperatures that define is_extreme_day and must never be model inputs.
 """
 import sqlite3
 from pathlib import Path
@@ -13,6 +23,12 @@ DB_PATH = Path("data/processed/climateflow.db")
 TRAIN_END_YEAR = 2019
 FULL_START = "2004-01-01"
 FULL_END   = "2023-12-31"
+
+# Same-day observation features → previous-day model features (prev_<name>)
+SAME_DAY_COLS = [
+    "temp_relative", "temp_max_relative", "temp_min_relative", "precip_relative",
+    "temp_range", "snow_present", "is_extreme_day",
+]
 
 NULL_RATE_CEILING = 0.15
 EXTREME_RATE_MIN  = 0.01
@@ -132,7 +148,7 @@ def add_relative_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Lag features (computed after reindexing)
+# Lag features (computed after reindexing; temp_lag_k is day t-k)
 # ---------------------------------------------------------------------------
 
 def add_lag_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -145,7 +161,7 @@ def add_lag_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Rolling features (computed after reindexing)
+# Rolling features (computed after reindexing; windows end on day t-1)
 # ---------------------------------------------------------------------------
 
 def add_rolling_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -153,16 +169,29 @@ def add_rolling_features(df: pd.DataFrame) -> pd.DataFrame:
 
     df["temp_roll_5"] = (
         df.groupby("city")["MEAN_TEMPERATURE"]
-        .transform(lambda s: s.rolling(5, min_periods=3).mean())
+        .transform(lambda s: s.shift(1).rolling(5, min_periods=3).mean())
     )
     df["temp_roll_7"] = (
         df.groupby("city")["MEAN_TEMPERATURE"]
-        .transform(lambda s: s.rolling(7, min_periods=4).mean())
+        .transform(lambda s: s.shift(1).rolling(7, min_periods=4).mean())
     )
     df["precip_roll_7"] = (
         df.groupby("city")["TOTAL_PRECIPITATION"]
-        .transform(lambda s: s.rolling(7, min_periods=4).sum())
+        .transform(lambda s: s.shift(1).rolling(7, min_periods=4).sum())
     )
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Previous-day features (computed after reindexing)
+# ---------------------------------------------------------------------------
+
+def add_previous_day_features(df: pd.DataFrame) -> pd.DataFrame:
+    """prev_<col> = value of <col> on day t-1. Needs the full calendar so that a
+    station gap yields NaN instead of an older day's value."""
+    df = df.sort_values(["city", "LOCAL_DATE"]).reset_index(drop=True)
+    for col in SAME_DAY_COLS:
+        df[f"prev_{col}"] = df.groupby("city")[col].shift(1)
     return df
 
 
@@ -276,7 +305,7 @@ def add_rainy_season_feature(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def add_target(df: pd.DataFrame, thresholds: pd.DataFrame, validate: bool = True) -> pd.DataFrame:
-    df = df.merge(thresholds, on="city", how="left")
+    df = df.merge(thresholds, on="city", how="left", sort=False)
 
     both_null = df["MAX_TEMPERATURE"].isnull() & df["MIN_TEMPERATURE"].isnull()
     extreme   = (
@@ -313,9 +342,12 @@ def save(df: pd.DataFrame, thresholds: pd.DataFrame) -> None:
         "MEAN_TEMPERATURE", "MAX_TEMPERATURE", "MIN_TEMPERATURE",
         "TOTAL_PRECIPITATION", "SNOW_ON_GROUND",
         "temp_relative", "temp_max_relative", "temp_min_relative", "precip_relative",
+        "temp_range", "snow_present",
+        "prev_temp_relative", "prev_temp_max_relative", "prev_temp_min_relative",
+        "prev_precip_relative", "prev_temp_range", "prev_snow_present",
+        "prev_is_extreme_day",
         "temp_lag_1", "temp_lag_2", "temp_lag_3",
         "temp_roll_5", "temp_roll_7", "precip_roll_7",
-        "temp_range", "snow_present",
         "day_of_year", "month", "season", "rainy_season",
         "is_extreme_day",
         "lat", "lon", "elevation", "province",
@@ -341,13 +373,13 @@ def save(df: pd.DataFrame, thresholds: pd.DataFrame) -> None:
 
 def report(df: pd.DataFrame) -> None:
     feature_cols = [
-        "temp_relative", "temp_max_relative", "temp_min_relative", "precip_relative",
+        "prev_temp_relative", "prev_temp_max_relative", "prev_temp_min_relative",
+        "prev_precip_relative", "prev_temp_range", "prev_snow_present",
         "temp_lag_1", "temp_lag_2", "temp_lag_3",
         "temp_roll_5", "temp_roll_7", "precip_roll_7",
-        "temp_range", "snow_present",
         "day_of_year", "month", "season", "rainy_season",
     ]
-    print("\nNull rates on engineered features:")
+    print("\nNull rates on model features:")
     for col in feature_cols:
         pct = df[col].isnull().mean() * 100
         print(f"  {col:<25} {pct:.1f}%")
@@ -367,22 +399,31 @@ def report(df: pd.DataFrame) -> None:
 # Run
 # ---------------------------------------------------------------------------
 
+def build_features(df: pd.DataFrame, thresholds: pd.DataFrame,
+                   validate: bool = True) -> pd.DataFrame:
+    # Same-day values and the target, on real rows only
+    df = add_relative_features(df)
+    df = add_derived_features(df)
+    df = add_target(df, thresholds, validate=validate)
+
+    df, n_before = reindex_to_full_calendar(df)
+    df = add_lag_features(df)            # must run while inserted rows are present
+    df = add_rolling_features(df)        # must run while inserted rows are present
+    df = add_previous_day_features(df)   # must run while inserted rows are present
+    df = drop_inserted(df, n_before)
+
+    # Calendar features of the target day are known in advance
+    df = add_calendar_features(df)
+    df = add_rainy_season_feature(df)
+    return df
+
+
 def run() -> None:
     print("=== Step 3 — Feature Engineering ===\n")
 
     df = load()
     thresholds = compute_thresholds(df)
-
-    df, n_before = reindex_to_full_calendar(df)
-    df = add_lag_features(df)       # must run while inserted rows are present
-    df = add_rolling_features(df)   # must run while inserted rows are present
-    df = drop_inserted(df, n_before)
-
-    df = add_relative_features(df)
-    df = add_derived_features(df)
-    df = add_calendar_features(df)
-    df = add_rainy_season_feature(df)
-    df = add_target(df, thresholds)
+    df = build_features(df, thresholds)
 
     report(df)
     save(df, thresholds)

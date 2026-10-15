@@ -44,19 +44,22 @@ def load() -> tuple:
     model   = bundle["model"]
     features = bundle["features"]
     winner  = bundle["winner"]
-    print(f"Loaded {len(df):,} rows  |  model: {winner}  |  {len(features)} features")
-    return df, model, features
+    threshold = bundle["threshold"]
+    print(f"Loaded {len(df):,} rows  |  model: {winner}  |  {len(features)} features  "
+          f"|  threshold {threshold}")
+    return df, model, features, threshold
 
 
 # ---------------------------------------------------------------------------
 # Generate predictions
 # ---------------------------------------------------------------------------
 
-def generate_predictions(df: pd.DataFrame, model, features: list) -> pd.DataFrame:
+def generate_predictions(df: pd.DataFrame, model, features: list,
+                         threshold: float) -> pd.DataFrame:
     valid = df[df["is_extreme_day"].notna()].copy()
     X = valid[features]
-    valid["y_pred"] = model.predict(X)
     valid["y_prob"] = model.predict_proba(X)[:, 1]
+    valid["y_pred"] = (valid["y_prob"] >= threshold).astype(int)
     print(f"Predictions generated for {len(valid):,} rows")
     return valid
 
@@ -187,7 +190,7 @@ def plot_time_series(df: pd.DataFrame) -> None:
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=2,
                fontsize=10, bbox_to_anchor=(0.5, -0.02))
-    fig.suptitle("Predicted vs actual extreme days per year — test period 2020–2023",
+    fig.suptitle("Next-day forecast vs actual extreme days per year — test period 2020–2023",
                  fontsize=13, y=1.01)
     fig.tight_layout()
 
@@ -217,7 +220,7 @@ def plot_city_f1(metrics: pd.DataFrame) -> None:
 
     ax.set_xlim(0, 1.05)
     ax.set_xlabel("F1 score", fontsize=10)
-    ax.set_title("Model F1 by city — test period 2020–2023", fontsize=12)
+    ax.set_title("Next-day forecast F1 by city — test period 2020–2023", fontsize=12)
     ax.axvline(data["f1"].mean(), color="tomato", linestyle="--",
                linewidth=1.2, label=f"Mean F1 = {data['f1'].mean():.3f}")
     ax.legend(fontsize=9)
@@ -306,8 +309,8 @@ def run() -> None:
     MAPS_DIR.mkdir(parents=True, exist_ok=True)
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    df, model, features = load()
-    df = generate_predictions(df, model, features)
+    df, model, features, threshold = load()
+    df = generate_predictions(df, model, features, threshold)
 
     summary = city_summary(df)
     metrics = pd.read_csv(OUT_DIR / "metrics_by_city.csv")

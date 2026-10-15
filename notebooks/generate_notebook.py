@@ -26,11 +26,13 @@ deep-freeze of the prairies. That diversity makes a simple question surprisingly
 ClimateFlow builds a reproducible pipeline that:
 1. Fetches 20 years of daily climate observations and 30-year normals from the MSC GeoMet OGC API
 2. Cleans and merges the data into SQLite
-3. Engineers 25 geospatial and temporal features, including anomalies relative to 30-year baselines
-4. Trains a city-specific XGBoost classifier to flag extreme temperature days
+3. Engineers temporal features, including anomalies relative to 30-year baselines
+4. Trains an XGBoost classifier to **forecast whether tomorrow will be an extreme temperature day**,
+   using only information available today, and compares it with two simple baselines
 5. Visualises results on an interactive Folium map
 
-**Key result:** F1 = 0.833 · Recall = 0.961 · ROC-AUC = 0.998 across 9 cities, 2020–2023 test period.
+**Key result (2020–2023 test period, 9 cities):** F1 = 0.617 and PR-AUC = 0.688 for the forecast,
+vs F1 = 0.606 and PR-AUC = 0.380 for persistence ("tomorrow is extreme if today was").
 """))
 
 # ── Setup ──────────────────────────────────────────────────────────────────
@@ -188,8 +190,8 @@ The 30-year climate normals (1981–2010) provide the climatological expected va
 city and month. Comparing observed temperatures to these baselines is more informative than
 looking at raw values: a mean of 5°C in January signals a warm spell; in July, a cold snap.
 
-This framing — *how anomalous is today relative to the long-run normal?* — is the foundation
-of the feature engineering in Section 4.
+This framing — *how anomalous was yesterday relative to the long-run normal?* — is the
+foundation of the feature engineering in Section 4.
 """))
 
 cells.append(code("""\
@@ -233,24 +235,38 @@ cells.append(md("""\
 ---
 ## 4. Feature Engineering
 
-`pipeline/features.py` engineers 25 model-ready features across four families.
+### The forecasting setup
 
-**Anomaly features** — how far is today from what is historically expected?
-`temp_relative = MEAN_TEMPERATURE − NORMAL_MEAN_TEMP` measures the departure from
-the 30-year normal for that city and month. Separate anomalies are computed for MAX and MIN.
+The target (Section 5) is defined from day $t$'s own MAX and MIN temperatures. A model given
+those same-day temperatures would simply re-apply the threshold rule and score almost perfectly
+while forecasting nothing. ClimateFlow therefore poses a **next-day forecast**: predict whether
+day $t$ is extreme using only information available at the end of day $t-1$.
 
-**Memory features** — weather has momentum.
-A cold snap doesn't appear from nowhere. `temp_lag_1/2/3` (yesterday, two days ago, three days ago)
-and `temp_roll_5/7` (5- and 7-day rolling means) give the model the recent temperature trajectory,
-which is often as predictive as today's reading.
+`pipeline/features.py` builds three families of model inputs. Every observation-based input
+ends on day $t-1$.
 
-**Calendar features** — timing shapes meaning.
-`day_of_year`, `month`, and `season` let the model learn that a −10°C reading in January
-is unremarkable but the same value in May is a genuine anomaly.
+**Previous-day anomalies.** How far was yesterday from what is historically expected?
+For any observed variable $T$, the anomaly is
 
-**Rainy season** — a city-specific binary flag derived from each city's own climate normals.
-Months where normal precipitation exceeds the city's annual monthly average are marked 1.
-This is computed from normals only — no leakage from observed daily values.
+$$\\Delta_{c,t-1} = T_{c,t-1} - N_{c,m(t-1)}$$
+
+where $T_{c,t-1}$ is the value observed in city $c$ on day $t-1$, $N_{c,m}$ is the 1981–2010
+climate normal for city $c$ and month $m$, and $m(t-1)$ is the month of day $t-1$.
+This gives `prev_temp_relative`, `prev_temp_max_relative`, `prev_temp_min_relative` and
+`prev_precip_relative`. `prev_temp_range` and `prev_snow_present` complete the set.
+
+**Memory features.** Weather has momentum. `temp_lag_1/2/3` are the mean temperatures of days
+$t-1$, $t-2$ and $t-3$. `temp_roll_5/7` and `precip_roll_7` are means and totals over windows
+that end on day $t-1$.
+
+**Calendar features.** These are known in advance. `day_of_year`, `month`, `season` and
+`rainy_season` describe day $t$ itself. `rainy_season` is computed from climate normals only.
+
+Two safeguards are built in:
+- Lags, rolling windows and previous-day values are computed on a full daily calendar per city.
+  A day after a station gap therefore gets NaN for "yesterday", not an older day's value.
+- `tests/test_features.py::TestForecastInputsExcludeDayT` changes one day's observed weather
+  and checks that none of that day's model inputs change.
 """))
 
 cells.append(code("""\
@@ -260,38 +276,47 @@ feat["LOCAL_DATE"] = pd.to_datetime(feat["LOCAL_DATE"])
 print(f"Feature table: {len(feat):,} rows × {feat.shape[1]} columns")
 print()
 
-engineered = [
-    "temp_relative", "temp_max_relative", "temp_min_relative", "precip_relative",
+model_inputs = [
+    "prev_temp_relative", "prev_temp_max_relative", "prev_temp_min_relative",
+    "prev_precip_relative", "prev_temp_range", "prev_snow_present",
     "temp_lag_1", "temp_lag_2", "temp_lag_3",
     "temp_roll_5", "temp_roll_7", "precip_roll_7",
-    "temp_range", "snow_present",
     "day_of_year", "month", "season", "rainy_season",
 ]
-null_rates = feat[engineered].isnull().mean().mul(100).round(1).rename("null %")
+null_rates = feat[model_inputs].isnull().mean().mul(100).round(1).rename("null %")
 print(null_rates.to_string())
 """))
 
+cells.append(md("""\
+### Why same-day features would be leakage
+
+The left panel shows **today's** minimum-temperature anomaly. Extreme and normal days separate
+almost perfectly, but only because the extreme label is defined from that same minimum
+temperature. The right panel shows **yesterday's** anomaly, which is what a forecaster
+actually has. The two groups still differ, but they overlap. That overlap is the real
+forecasting problem.
+"""))
+
 cells.append(code("""\
-# Do anomaly features actually separate extreme from normal days?
-fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+fig, axes = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
 
 for ax, col, title in zip(axes,
-    ["temp_relative", "temp_min_relative"],
-    ["Mean temperature anomaly (°C)", "Min temperature anomaly (°C)"],
+    ["temp_min_relative", "prev_temp_min_relative"],
+    ["Same day: MIN anomaly on day t (leaks the label)",
+     "Forecast input: MIN anomaly on day t−1"],
 ):
     for val, color, label in [
-        (0.0, "#aaaaaa", "Normal day"),
-        (1.0, "#e05c2b", "Extreme day"),
+        (0.0, "#aaaaaa", "Normal day t"),
+        (1.0, "#e05c2b", "Extreme day t"),
     ]:
         vals = feat[feat["is_extreme_day"] == val][col].dropna()
         ax.hist(vals, bins=60, alpha=0.55, color=color, label=label, density=True)
-    ax.set_xlabel(title)
-    ax.set_ylabel("Density")
-    ax.set_title(title, fontweight="bold")
+    ax.set_xlabel("Min temperature anomaly (°C)")
+    ax.set_title(title, fontweight="bold", fontsize=10)
     ax.legend(fontsize=8)
     ax.spines[["top", "right"]].set_visible(False)
+axes[0].set_ylabel("Density")
 
-fig.suptitle("Anomaly features cleanly separate extreme from normal days", fontweight="bold", y=1.02)
 plt.tight_layout()
 plt.show()
 """))
@@ -379,16 +404,44 @@ Three properties made XGBoost the right choice for this problem:
 
 ### The train/test split
 
-The split is **temporal**, not random:
+The split is **temporal**, not random, with a validation window inside the training years:
 
-| Set | Years | Days |
+| Set | Years | Used for |
 |---|---|---|
-| Train | 2004–2019 | ~46,000 |
-| Test | 2020–2023 | ~12,000 |
+| Fit | 2004–2016 | Fitting candidate models |
+| Validation | 2017–2019 | Choosing the decision threshold and the feature set |
+| Train (refit) | 2004–2019 | Fitting the final model |
+| Test | 2020–2023 | Final scores only |
 
-A random split would leak future data into training — a model that saw 2022 observations during
-training would appear to generalise but would fail in deployment. The forward split simulates
-real operational use: learn from history, predict the future.
+A random split would leak future data into training. The test years are never used to
+choose anything.
+
+### Decision threshold
+
+The model outputs a probability $\\hat p_{c,t}$ and flags day $t$ when $\\hat p_{c,t} \\ge \\tau$.
+The threshold $\\tau$ is the value in $\\{0.05, 0.06, \\dots, 0.95\\}$ that maximises F1 on the
+validation years. Training uses `scale_pos_weight` ≈ 29 to offset the ~3% extreme-day rate.
+That pushes probabilities up, so the default $\\tau = 0.5$ would flood the forecast with false alarms.
+
+### Baselines
+
+- **Persistence:** $\\hat y_{c,t} = y_{c,t-1}$, i.e. tomorrow is extreme if today was. A missing
+  $y_{c,t-1}$ counts as 0.
+- **Seasonal base rate:** the score is $r_{c,m(t)}$, the share of extreme days in city $c$ and
+  month $m(t)$ during 2004–2019. A day is flagged when $r_{c,m(t)} \\ge \\kappa$, where $\\kappa$
+  is the cut-off that maximises F1 on the training years.
+
+### Metrics
+
+With $TP$, $FP$ and $FN$ the counts of true positives, false positives and false negatives:
+
+$$\\text{Precision} = \\frac{TP}{TP+FP}, \\qquad \\text{Recall} = \\frac{TP}{TP+FN}, \\qquad
+F_1 = \\frac{2\\,\\text{Precision}\\cdot\\text{Recall}}{\\text{Precision}+\\text{Recall}}$$
+
+**PR-AUC** (average precision) is $\\sum_n (R_n - R_{n-1})\\,P_n$, where $P_n$ and $R_n$ are the
+precision and recall when days are flagged down to the $n$-th highest score. **ROC-AUC** is the
+probability that a randomly chosen extreme day scores higher than a randomly chosen normal day.
+With ~97% normal days, ROC-AUC is high for almost any method. PR-AUC is the more telling score.
 """))
 
 cells.append(code("""\
@@ -400,45 +453,63 @@ print(f"Test : {len(test):,} days  |  extreme rate: {test['is_extreme_day'].mean
 """))
 
 cells.append(code("""\
-metrics = pd.read_csv(PROJ / "outputs/metrics_by_city.csv")
-
-overall = pd.DataFrame([{
-    "city": "Overall (macro avg)", "n_total": metrics["n_total"].sum(),
-    "n_extreme": metrics["n_extreme"].sum(),
-    "f1": 0.833, "precision": 0.782, "recall": 0.961, "roc_auc": 0.998,
-}])
-display_df = pd.concat([metrics, overall], ignore_index=True)
-display_df = display_df.rename(columns={
-    "city": "City", "n_total": "Test days", "n_extreme": "Extreme days",
-    "f1": "F1", "precision": "Precision", "recall": "Recall", "roc_auc": "ROC-AUC",
-})
-
-(display_df.style
-    .hide(axis="index")
-    .format({
-        "F1": "{:.3f}", "Precision": "{:.3f}", "Recall": "{:.3f}", "ROC-AUC": "{:.4f}",
-        "Test days": "{:,}", "Extreme days": "{:,}",
-    })
-    .apply(lambda row: [
-        "font-weight: bold; background-color: #f0f4ff" if row["City"].startswith("Overall") else ""
-        for _ in row
-    ], axis=1)
+results = pd.read_csv(PROJ / "outputs/ablation_results.csv")
+labels = {
+    "baseline_climatology":  "Baseline: seasonal base rate",
+    "baseline_persistence":  "Baseline: persistence",
+    "with_season":           "XGBoost: with season",
+    "without_season":        "XGBoost: without season",
+    "with_season_and_rainy": "XGBoost: with season + rainy season",
+}
+results["method"] = results["feature_set"].map(labels)
+cols = ["method", "f1", "precision", "recall", "roc_auc", "pr_auc", "val_f1", "threshold", "winner"]
+(results[cols]
+    .rename(columns={"f1": "F1", "precision": "Precision", "recall": "Recall",
+                     "roc_auc": "ROC-AUC", "pr_auc": "PR-AUC",
+                     "val_f1": "Validation F1", "threshold": "Threshold"})
+    .style.hide(axis="index")
+    .format(precision=3, na_rep="—")
+    .apply(lambda row: ["font-weight: bold; background-color: #f0f4ff" if row["winner"] else ""
+                        for _ in row], axis=1)
 )
+"""))
+
+cells.append(code("""\
+display(Image(PLOTS / "baseline_comparison.png", width=700))
 """))
 
 cells.append(md("""\
 **Interpreting the results:**
 
-- **Recall = 0.961** — the model catches 96% of all true extreme days. Missing only 4% of
-  real events is the right trade-off for a climate-risk application where false negatives
-  are more costly than false alarms.
-- **ROC-AUC ≈ 1.0** across all cities — the model has near-perfect rank-ordering ability,
-  consistently scoring extreme days higher than normal days regardless of the exact threshold.
-- **Toronto's lower F1 (0.691)** reflects a smaller extreme-day sample (20 events in 4 years),
-  making precision volatile — one extra false positive materially shifts the score.
+- **Persistence is a strong baseline.** Extreme cold and heat come in multi-day spells, so
+  "same as today" alone reaches F1 = 0.61. At its validation-chosen threshold, the forecast
+  only slightly improves on that (F1 = 0.617 on the test years).
+- **The forecast's advantage is ranking.** Its PR-AUC is 0.69, against 0.38 for persistence and
+  0.13 for the seasonal base rate. It gives a graded probability that can be traded between
+  missed events and false alarms. Persistence gives only a yes/no answer.
+- **Feature-set differences are noise.** `season` and `rainy_season` change validation F1 by
+  less than 0.01. The saved model is the set with the highest validation F1 (`without_season`).
+"""))
 
-An ablation test confirmed that including the `season` feature improved all four metrics
-simultaneously — it was retained.
+cells.append(code("""\
+metrics = pd.read_csv(PROJ / "outputs/metrics_by_city.csv")
+(metrics.rename(columns={
+    "city": "City", "n_total": "Test days", "n_extreme": "Extreme days",
+    "f1": "F1", "precision": "Precision", "recall": "Recall",
+    "roc_auc": "ROC-AUC", "pr_auc": "PR-AUC",
+  })
+  .style.hide(axis="index")
+  .format({"F1": "{:.3f}", "Precision": "{:.3f}", "Recall": "{:.3f}",
+           "ROC-AUC": "{:.3f}", "PR-AUC": "{:.3f}",
+           "Test days": "{:,}", "Extreme days": "{:,}"})
+)
+"""))
+
+cells.append(md("""\
+The Prairie cities (Calgary, Edmonton, Saskatoon) score highest, with F1 = 0.72–0.77. They have the
+most extreme days, and those come mostly in long Arctic cold spells that are visible a day early.
+Toronto, Ottawa and Montréal have only 20–25 extreme days in four years. Their scores are lower
+and noisy: a couple of hits or misses moves F1 by several points.
 """))
 
 cells.append(code("""\
@@ -446,14 +517,10 @@ display(Image(PLOTS / "feature_importance.png", width=760))
 """))
 
 cells.append(md("""\
-`temp_min_relative` — the departure of today's minimum temperature from its 30-year normal —
-is the single most important feature. This makes physical sense: cold extremes carry a
-stronger and more consistent signal than warm extremes (see Section 7).
-
-The rolling and lag features (`temp_roll_5`, `temp_lag_1`) confirm that weather trajectory
-matters: knowing where temperatures have been over the past week is nearly as informative
-as the current reading. Calendar features (`day_of_year`, `season`) contribute substantially,
-reflecting high-risk months specific to each city.
+`temp_lag_1`, yesterday's mean temperature, is by far the most important input. The second is
+`prev_temp_min_relative`, yesterday's minimum-temperature anomaly. In a next-day forecast, the
+most recent observation carries most of the signal. Calendar features (`day_of_year`, `month`)
+add the seasonal context: the same anomaly matters more in some months than in others.
 """))
 
 # ── SECTION 7: WARM/COLD ASYMMETRY ─────────────────────────────────────────
@@ -462,7 +529,7 @@ cells.append(md("""\
 ---
 ## 7. Finding: Why Are There More Cold Extreme Days Than Warm?
 
-Examining the model's predictions revealed a striking asymmetry: cold extreme days
+Examining the extreme-day labels revealed a striking asymmetry: cold extreme days
 outnumber warm extreme days by 10–100× in most Canadian cities.
 
 The climate-change intuition — that temperatures have been trending warmer since 2000,
@@ -498,8 +565,9 @@ cells.append(md("""\
 ---
 ## 8. Interactive Map
 
-Each marker is placed at the station coordinates, sized and coloured by the share of
-test-period days flagged as extreme. Click any marker for city-level metrics.
+Each marker is placed at the station coordinates, sized and coloured by the city's share of
+extreme days over 2004–2023. Click any marker to see the actual and forecast extreme-day
+counts for 2020–2023 and the city's forecast F1.
 
 Prairie cities (Saskatoon, Calgary, Winnipeg) anchor the high end of the scale;
 Vancouver sits at the low end — consistent with the asymmetry finding above.
@@ -517,11 +585,14 @@ cells.append(md("""\
 ---
 ## 9. Conclusions
 
-ClimateFlow shows that city-specific, data-driven thresholds outperform fixed national
-cutoffs for defining climate extremes across a geographically diverse country like Canada.
-An XGBoost classifier trained on anomaly, memory, and calendar features achieves strong
-predictive performance (F1 = 0.833, ROC-AUC = 0.998) on a genuinely forward-looking
-test set — no 2020–2023 data was seen during training.
+ClimateFlow shows that city-specific, data-driven thresholds are a better way than fixed
+national cutoffs to define climate extremes across a country as varied as Canada.
+
+Framed honestly as a next-day forecast, the problem is hard. Persistence ("tomorrow is
+extreme if today was") is already a strong baseline (F1 = 0.61). On the 2020–2023 test years,
+the XGBoost forecast matches and slightly beats it on F1 (0.617). It nearly doubles
+persistence's PR-AUC (0.69 vs 0.38), which makes it a usable risk score rather than a
+yes/no rule. No 2020–2023 data was used for training, threshold choice or feature-set selection.
 
 The most interesting finding emerged from diagnosing the output: the dominance of cold
 extreme days over warm is a structural property of Canadian temperature distributions,
@@ -536,7 +607,7 @@ near-equal warm and cold counts — a clean natural experiment.
 ```bash
 python -m pipeline.ingest    # fetch data from MSC GeoMet API
 python -m pipeline.clean     # clean, impute, merge normals → SQLite
-python -m pipeline.features  # engineer 25 features
+python -m pipeline.features  # engineer next-day forecast features
 python -m models.forecast    # train XGBoost, save outputs
 python -m viz.map            # interactive map + plots
 ```

@@ -1,4 +1,6 @@
-feature_set,f1,precision,recall,roc_auc,winner
-with_season,0.8306,0.7461,0.9367,0.998,False
-without_season,0.823,0.7324,0.9392,0.9979,False
-with_season_and_rainy,0.854,0.7732,0.9538,0.9984,True
+feature_set,f1,precision,recall,roc_auc,pr_auc,val_f1,threshold,winner
+baseline_persistence,0.6058,0.6058,0.6058,0.7964,0.3798,,,False
+baseline_climatology,0.2238,0.1443,0.4988,0.8729,0.1291,,,False
+with_season,0.6219,0.6361,0.6083,0.9667,0.6884,0.594,0.9,False
+without_season,0.6173,0.5803,0.6594,0.9657,0.6881,0.6008,0.87,True
+with_season_and_rainy,0.6306,0.6238,0.6375,0.9687,0.6889,0.5965,0.89,False
